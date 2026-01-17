@@ -1,2 +1,5 @@
 logs
 /data/*/data
+__pycache__/
+*.pyc
+docs/

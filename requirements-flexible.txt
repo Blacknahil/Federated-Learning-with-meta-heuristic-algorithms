@@ -1,0 +1,26 @@
+# Core ML/DL
+tensorflow>=2.10.0
+keras>=3.0.0
+scikit-learn
+scipy
+numpy
+matplotlib
+pillow
+h5py
+
+# Jupyter
+jupyter
+jupyterlab
+notebook
+ipykernel
+ipython
+ipywidgets
+
+# Utilities
+tqdm
+requests
+pyyaml
+pandas
+
+# TensorBoard
+tensorboard

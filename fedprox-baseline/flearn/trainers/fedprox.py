@@ -6,6 +6,7 @@ from flearn.trainers.fedbase import BaseFedarated
 from flearn.optimizer.pgd import PerturbedGradientDescent
 from flearn.utils.tf_utils import process_grad, process_sparse_grad
 from flearn.selection.genetic import genetic_select
+from flearn.selection.particle_swarm import pso_select
 
 
 class Server(BaseFedarated):
@@ -33,6 +34,25 @@ class Server(BaseFedarated):
 
         # GA immediate/saveable data container
         self.ga_history = {
+            'local_grads': None,
+            'global_grad': None,
+            'last_selected_indices': None,
+            'last_gradient_dissimilarity': None,
+        }
+
+        # PSO control parameters
+        self.pso_params = {
+            'swarm_size': int(params.get('pso_swarm_size', 30)),
+            'num_iter': int(params.get('pso_num_iter', 20)),
+            'w': float(params.get('pso_w', 0.7)),
+            'c1': float(params.get('pso_c1', 1.5)),
+            'c2': float(params.get('pso_c2', 1.5)),
+            'v_max': float(params.get('pso_v_max', 4.0)),
+            'selection_penalty': float(params.get('pso_selection_penalty', 0.0))
+        }
+
+        # PSO immediate/saveable data container
+        self.pso_history = {
             'local_grads': None,
             'global_grad': None,
             'last_selected_indices': None,
@@ -125,8 +145,8 @@ class Server(BaseFedarated):
             return self.genetic(num_clients, local_grads=local_grads, global_grad=global_grad, samples=samples)
             
         elif self.selection_method == 'pso':
-            # Your Particle Swarm logic here
-            return self.particle_swarm(num_clients)
+            # Delegate to PSO with precomputed gradients
+            return self.particle_swarm(num_clients, local_grads=local_grads, global_grad=global_grad, samples=samples)
         
         elif self.selection_method == 'sa':
             # Your Simulated Annealing logic here
@@ -190,10 +210,62 @@ class Server(BaseFedarated):
 
         return indices, np.asarray(self.clients)[indices]
     
-    def particle_swarm(self, num_clients):
-        # Placeholder for Particle Swarm Optimization client selection
+    def particle_swarm(self, num_clients, local_grads=None, global_grad=None, samples=None):
+        """PSO-based client selection optimizing gradient similarity."""
         num_clients = min(num_clients, len(self.clients))
-        indices = np.random.choice(range(len(self.clients)), num_clients, replace=False)
+        n = len(self.clients)
+        k = int(num_clients)
+
+        # Trivial cases
+        if k <= 0:
+            return np.array([], dtype=int), np.asarray(self.clients)[[]]
+        if k >= n:
+            indices = np.arange(n)
+            if hasattr(self, 'selection_counts'):
+                self.selection_counts += 1
+            self.pso_history['last_selected_indices'] = indices
+            self.pso_history['last_gradient_dissimilarity'] = 0.0
+            return indices, np.asarray(self.clients)[indices]
+
+        # If gradients weren't passed in, compute them here
+        if local_grads is None or global_grad is None or samples is None:
+            model_len = process_grad(self.latest_model).size
+            local_grads = []
+            samples = []
+            self.client_model.set_params(self.latest_model)
+            for c in self.clients:
+                num, grad = c.get_grads(model_len)
+                samples.append(num)
+                local_grads.append(grad)
+            local_grads = np.asarray(local_grads)
+            samples = np.asarray(samples, dtype=float)
+
+            if samples.sum() > 0:
+                global_grad = np.sum(local_grads * samples[:, None], axis=0) / np.sum(samples)
+            else:
+                global_grad = np.mean(local_grads, axis=0)
+
+        # Save immediate PSO data
+        self.pso_history['local_grads'] = local_grads
+        self.pso_history['global_grad'] = global_grad
+
+        # Call generic PSO selector
+        indices, info = pso_select(
+            local_grads=local_grads,
+            global_grad=global_grad,
+            k=k,
+            samples=samples,
+            selection_counts=getattr(self, 'selection_counts', None),
+            pso_params=getattr(self, 'pso_params', None),
+            rng=np.random.RandomState()
+        )
+
+        # Update selection counts and history
+        if hasattr(self, 'selection_counts') and indices.size > 0:
+            self.selection_counts[indices] += 1
+        self.pso_history['last_selected_indices'] = indices
+        self.pso_history['last_gradient_dissimilarity'] = info.get('dissimilarity', None)
+
         return indices, np.asarray(self.clients)[indices]
     
     def simulated_annealing(self, num_clients):
