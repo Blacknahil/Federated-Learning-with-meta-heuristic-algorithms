@@ -54,7 +54,9 @@ class Model(object):
         # eval_metric_ops = tf.count_nonzero(tf.equal(labels, predictions["classes"]))
         
         correct_prediction = tf.equal(labels, predictions["classes"])
-        eval_metric_ops = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        # return the number of correct predictions (counts), not the mean.
+        # Callers expect a count to compute a weighted global accuracy.
+        eval_metric_ops = tf.reduce_sum(tf.cast(correct_prediction, tf.float32))
         return features, labels, train_op, grads, eval_metric_ops, loss
 
     def set_params(self, model_params=None):
@@ -83,11 +85,13 @@ class Model(object):
     
     def solve_inner(self, data, num_epochs=1, batch_size=32):
         '''Solves local optimization problem'''
+        # print(f"DEBUG: Client training on {len(data['y'])} samples with batch {batch_size}")
         for _ in trange(num_epochs, desc='Epoch: ', leave=False, ncols=120):
             for X, y in batch_data(data, batch_size):
                 with self.graph.as_default():
-                    self.sess.run(self.train_op,
+                    _, loss_val = self.sess.run([self.train_op, self.loss],
                         feed_dict={self.features: X, self.labels: y})
+                    # print(f"DEBUG: Local Loss: {loss_val}") # Uncomment to see if loss decreases
         soln = self.get_params()
         comp = num_epochs * (len(data['y'])//batch_size) * batch_size * self.flops
         return soln, comp
