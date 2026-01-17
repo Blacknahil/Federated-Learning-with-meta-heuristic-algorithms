@@ -6,3 +6,4 @@ python3  -u main.py --dataset=$1 --optimizer='fedprox'  \
             --model='mclr' \
             --drop_percent=$2 \
             --mu=$3 \
+            --selection_method=$4 \
