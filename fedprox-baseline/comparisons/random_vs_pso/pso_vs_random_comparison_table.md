@@ -1,17 +1,17 @@
-# Comparison: Random vs Genetic
+# Comparison: Random vs PSO
 
 ## Metrics
 
-| Metric | Random | Genetic |
+| Metric | Random | PSO |
 |---:|:---:|:---:|
-| best_acc | 0.8976794680417968 | 0.9020219839869724 |
-| rounds_to_90% | None | 194 |
-| loss_std_last10 | 0.010780086003025692 | 0.012957566022818017 |
-| avg_grad_diff | 15.495740692833978 | 17.176235485808125 |
+| best_acc | 0.8976794680417968 | 0.8986293934048039 |
+| rounds_to_90% | None | None |
+| loss_std_last10 | 0.010780086003025692 | 0.011286012763595216 |
+| avg_grad_diff | 15.495740692833978 | 18.29166481569364 |
 
 ## Training Parameters
 
-| Parameter | Random | Genetic |
+| Parameter | Random | PSO |
 |---|---|---|
 | batch_size | 10 | 10 |
 | clients_per_round | 10 | 10 |
@@ -27,4 +27,4 @@
 | num_rounds | 200 | 200 |
 | optimizer | fedprox | fedprox |
 | seed | 0 | 0 |
-| selection_method | random | ga |
+| selection_method | random | pso |

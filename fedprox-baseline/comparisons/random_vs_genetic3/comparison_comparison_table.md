@@ -4,10 +4,10 @@
 
 | Metric | Random | Genetic |
 |---:|:---:|:---:|
-| best_acc | 0.8976794680417968 | 0.9020219839869724 |
-| rounds_to_90% | None | 194 |
-| loss_std_last10 | 0.010780086003025692 | 0.012957566022818017 |
-| avg_grad_diff | 15.495740692833978 | 17.176235485808125 |
+| best_acc | 0.8967295426787896 | 0.8991722078979508 |
+| rounds_to_90% | None | None |
+| loss_std_last10 | 0.01185448494902312 | 0.005889008066330272 |
+| avg_grad_diff | 16.7391282130378 | 17.22332268605272 |
 
 ## Training Parameters
 
@@ -16,7 +16,7 @@
 | batch_size | 10 | 10 |
 | clients_per_round | 10 | 10 |
 | dataset | mnist | mnist |
-| drop_percent | 0.5 | 0.5 |
+| drop_percent | 0.1 | 0.1 |
 | eval_every | 1 | 1 |
 | learning_rate | 0.03 | 0.03 |
 | model | mclr | mclr |

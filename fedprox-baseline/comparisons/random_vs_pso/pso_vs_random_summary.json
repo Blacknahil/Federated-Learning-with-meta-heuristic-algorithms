@@ -4,19 +4,55 @@
     "PSO"
   ],
   "best_acc": [
-    0.8967295426787896,
-    0.904871760075994
+    0.8976794680417968,
+    0.8986293934048039
   ],
   "rounds_to_target": [
     null,
-    152
+    null
   ],
   "loss_std_lastN": [
-    0.011854232672137794,
-    0.007843160065748622
+    0.010780086003025692,
+    0.011286012763595216
   ],
   "avg_grad_diff": [
-    16.739144984909146,
-    17.85554414585777
+    15.495740692833978,
+    18.29166481569364
+  ],
+  "params": [
+    {
+      "batch_size": 10,
+      "clients_per_round": 10,
+      "dataset": "mnist",
+      "drop_percent": 0.5,
+      "eval_every": 1,
+      "learning_rate": 0.03,
+      "model": "mclr",
+      "model_params": "(10,)",
+      "mu": 1.0,
+      "num_epochs": 20,
+      "num_iters": 1,
+      "num_rounds": 200,
+      "optimizer": "fedprox",
+      "seed": 0,
+      "selection_method": "random"
+    },
+    {
+      "batch_size": 10,
+      "clients_per_round": 10,
+      "dataset": "mnist",
+      "drop_percent": 0.5,
+      "eval_every": 1,
+      "learning_rate": 0.03,
+      "model": "mclr",
+      "model_params": "(10,)",
+      "mu": 1.0,
+      "num_epochs": 20,
+      "num_iters": 1,
+      "num_rounds": 200,
+      "optimizer": "fedprox",
+      "seed": 0,
+      "selection_method": "pso"
+    }
   ]
 }

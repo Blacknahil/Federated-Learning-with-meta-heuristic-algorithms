@@ -1,10 +1,10 @@
-metric,Random,Genetic
-best_acc,0.8976794680417968,0.9020219839869724
-rounds_to_90%,,194
-loss_std_last10,0.010780086003025692,0.012957566022818017
-avg_grad_diff,15.495740692833978,17.176235485808125
+metric,Random,SA
+best_acc,0.8976794680417968,0.5590989279413761
+rounds_to_90%,,
+loss_std_last10,0.010780086003025692,0.01162917577859752
+avg_grad_diff,15.495740692833978,62.37318507609447
 ,,
-parameter,Random,Genetic
+parameter,Random,SA
 batch_size,10,10
 clients_per_round,10,10
 dataset,mnist,mnist
@@ -19,4 +19,4 @@ num_iters,1,1
 num_rounds,200,200
 optimizer,fedprox,fedprox
 seed,0,0
-selection_method,random,ga
+selection_method,random,sa

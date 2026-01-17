@@ -1,23 +1,23 @@
 {
   "label": [
     "Random",
-    "Genetic"
+    "SA"
   ],
   "best_acc": [
     0.8976794680417968,
-    0.9020219839869724
+    0.5590989279413761
   ],
   "rounds_to_target": [
     null,
-    194
+    null
   ],
   "loss_std_lastN": [
     0.010780086003025692,
-    0.012957566022818017
+    0.01162917577859752
   ],
   "avg_grad_diff": [
     15.495740692833978,
-    17.176235485808125
+    62.37318507609447
   ],
   "params": [
     {
@@ -52,7 +52,7 @@
       "num_rounds": 200,
       "optimizer": "fedprox",
       "seed": 0,
-      "selection_method": "ga"
+      "selection_method": "sa"
     }
   ]
 }
