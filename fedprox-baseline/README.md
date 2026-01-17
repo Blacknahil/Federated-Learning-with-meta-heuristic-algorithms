@@ -5,7 +5,6 @@ This repository contains a FedProx implementation and meta-heuristic client sele
 Quick summary
 - Trainer: `flearn/trainers/fedprox.py` (Server class)
 - Model (MNIST): `flearn/models/mnist/mclr.py`
-- Central training helper: `central_train.py`
 - Entry point: `main.py`
 - Shell runner: `fedprox.sh`
 
@@ -49,20 +48,13 @@ python3 -u main.py --dataset mnist --optimizer fedprox \
     --model mclr --drop_percent 0.1 --mu 1.0 --selection_method random --seed 0
 ```
 
-Run central (non-federated) training on full dataset for comparison
 
-```bash
-python3 central_train.py
-```
 
 Notes and troubleshooting
 - Accuracy scaling: The trainer expects per-client evaluation to return a count of correct predictions (not a mean). If you see unusually low accuracies (e.g. ~10-20%), verify model `test()` returns counts. The repository has been patched to return counts for MNIST.
 - `main.py` default optimizer value in the code may be `'fedavg'` while only `'fedprox'` is supported in the `OPTIMIZERS` list; pass `--optimizer fedprox` or use `fedprox.sh`.
-- If using TF 2.x and you hit missing `tf.compat.v1.layers.dense`, `central_train.py` and `main.py` already include a small compatibility shim that maps `tf.compat.v1.layers.dense` to `tf.keras.layers.Dense`.
+- If using TF 2.x and you hit missing `tf.compat.v1.layers.dense`, `main.py` already include a small compatibility shim that maps `tf.compat.v1.layers.dense` to `tf.keras.layers.Dense`.
 
 Reproducibility
 - Random seeds are set in `main.py` (seed flags). Use `--seed` to change randomness.
 
-Want me to:
-- Run a short training run to verify accuracy improves after the recent fix? (I can run a quick smoke test locally.)
-- Add a `requirements.txt` or minimal test script?
