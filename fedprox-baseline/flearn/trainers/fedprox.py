@@ -17,13 +17,14 @@ class Server(BaseFedarated):
 
         # GA control parameters (can be provided via params)
         self.ga_params = {
-            'pop_size': int(params.get('ga_pop_size', 30)),
-            'num_gen': int(params.get('ga_num_gen', 15)),
+            'pop_size': int(params.get('ga_pop_size', 50)),
+            'num_gen': int(params.get('ga_num_gen', 20)),
             'mutation_rate': float(params.get('ga_mutation_rate', 0.1)),
             'crossover_rate': float(params.get('ga_crossover_rate', 0.9)),
             'selection_method': params.get('ga_selection_method', 'tournament'),
             'tournament_size': int(params.get('ga_tournament_size', 3)),
-            'selection_penalty': float(params.get('ga_selection_penalty', 0.0))
+            'selection_penalty': float(params.get('ga_selection_penalty', 0.0)),
+            'elitism': int(params.get('ga_elitism', 1))
         }
 
         # Historical data for advanced strategies
