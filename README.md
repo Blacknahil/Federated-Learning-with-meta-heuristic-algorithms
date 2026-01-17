@@ -62,6 +62,11 @@ Notes and troubleshooting:
 - Default optimizer in `main.py` may still read `'fedavg'` while only `'fedprox'` is supported in `OPTIMIZERS`; pass `--optimizer fedprox` or use `fedprox.sh`.
 - If TF 2.x reports missing `tf.compat.v1.layers.dense`, `main.py` maps it to `tf.keras.layers.Dense`.
 
+## Paper
+The paper describing these meta-heuristic client selection methods is included in the Nature-Inspired book uploaded at the repository root.
+
+Direct link: [Nature-Inspired Metaheuristics_for_Client_Selection_FL.pdf](Nature-Inspired%20Metaheuristics_for_Client_Selection_FL.pdf)
+
 ## Upstream FedProx reference
 This repository does not include the original FedProx implementation. For the upstream reference, see:
 
