@@ -94,7 +94,22 @@ def read_options():
                         choices=CLIENT_SELECTION,
                         default="random"
                         )
-
+    parser.add_argument('--sa_initial_temp',
+                        help='Initial temperature for simulated annealing',
+                        type=float,
+                        default=100.0)
+    parser.add_argument('--sa_cooling_rate',
+                        help='Cooling rate for simulated annealing',
+                        type=float,
+                        default=0.95)
+    parser.add_argument('--sa_min_temp',
+                        help='Minimum temperature for simulated annealing',
+                        type=float,
+                        default=0.1)
+    parser.add_argument('--sa_epochs',
+                        help='Number of SA iterations per round',
+                        type=int,
+                        default=30)
 
     try: parsed = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
