@@ -15,6 +15,7 @@ os.environ["TF_USE_LEGACY_KERAS"] = "1"
 # GLOBAL PARAMETERS
 OPTIMIZERS = [ 'fedprox']
 DATASETS = [ 'mnist']  # NIST is EMNIST in the paepr
+CLIENT_SELECTION = ["random", "ga", "pso", "sa"]
 
 
 MODEL_PARAMS = {
@@ -87,6 +88,12 @@ def read_options():
                         help='percentage of slow devices',
                         type=float,
                         default=0.1)
+    parser.add_argument('--selection_method',
+                        help = "client selection method",
+                        type= str,
+                        choices=CLIENT_SELECTION,
+                        default="random"
+                        )
 
 
     try: parsed = vars(parser.parse_args())
