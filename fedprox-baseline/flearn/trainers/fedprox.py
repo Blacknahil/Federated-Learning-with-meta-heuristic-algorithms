@@ -1,4 +1,5 @@
 import numpy as np
+import time
 from tqdm import trange, tqdm
 import tensorflow as tf
 
@@ -6,6 +7,7 @@ from flearn.trainers.fedbase import BaseFedarated
 from flearn.optimizer.pgd import PerturbedGradientDescent
 from flearn.utils.tf_utils import process_grad, process_sparse_grad
 from flearn.selection.genetic import genetic_select
+from flearn.selection.simulated_annealing import simulated_annealing_select
 from flearn.selection.particle_swarm import pso_select
 
 
@@ -39,6 +41,15 @@ class Server(BaseFedarated):
             'global_grad': None,
             'last_selected_indices': None,
             'last_gradient_dissimilarity': None,
+        }
+
+        # SA parameters (can be overridden via params['sa_*'])
+        self.sa_params = {
+            'init_temp': float(params.get('sa_init_temp', 1.0)),
+            'cooling_rate': float(params.get('sa_cooling_rate', 0.99)),
+            'iterations': int(params.get('sa_iterations', 200)),
+            'selection_penalty': float(params.get('sa_selection_penalty', 0.01)),
+            'hybrid_fraction': float(params.get('sa_hybrid_fraction', 0.5))
         }
 
         # PSO control parameters
@@ -150,8 +161,13 @@ class Server(BaseFedarated):
             return self.particle_swarm(round, num_clients, local_grads=local_grads, global_grad=global_grad, samples=samples)
         
         elif self.selection_method == 'sa':
-            # Your Simulated Annealing logic here
-            return self.simulated_annealing(num_clients)
+            # Delegate to Simulated Annealing and pass precomputed gradients when available
+            return self.simulated_annealing(num_clients, local_grads=local_grads, global_grad=global_grad, samples=samples)
+
+        elif self.selection_method == 'sa_hybrid':
+            # Hybrid: part SA, part random
+            return self.simulated_annealing_hybrid(num_clients, local_grads=local_grads, global_grad=global_grad, samples=samples)
+            
     
     def genetic(self, round_idx, num_clients, local_grads=None, global_grad=None, samples=None):
         # Delegate to the modular GA selector (keeps this class clean).
@@ -269,8 +285,140 @@ class Server(BaseFedarated):
 
         return indices, np.asarray(self.clients)[indices]
     
-    def simulated_annealing(self, num_clients):
-        # Placeholder for Simulated Annealing client selection
+    def simulated_annealing(self, num_clients, local_grads=None, global_grad=None, samples=None):
+        # Delegate to SA selector implementation if gradients are available
         num_clients = min(num_clients, len(self.clients))
-        indices = np.random.choice(range(len(self.clients)), num_clients, replace=False)
+        n = len(self.clients)
+        k = int(num_clients)
+
+        # trivial cases
+        if k <= 0:
+            return np.array([], dtype=int), np.asarray(self.clients)[[]]
+        if k >= n:
+            indices = np.arange(n)
+            if hasattr(self, 'selection_counts'):
+                self.selection_counts += 1
+            self.ga_history['last_selected_indices'] = indices
+            self.ga_history['last_gradient_dissimilarity'] = 0.0
+            return indices, np.asarray(self.clients)[indices]
+
+        # If gradients weren't passed in via select_clients wrapper, compute them here
+        if local_grads is None or global_grad is None or samples is None:
+            model_len = process_grad(self.latest_model).size
+            local_grads = []
+            samples = []
+            self.client_model.set_params(self.latest_model)
+            for c in self.clients:
+                num, grad = c.get_grads(model_len)
+                samples.append(num)
+                local_grads.append(grad)
+            local_grads = np.asarray(local_grads)
+            samples = np.asarray(samples, dtype=float)
+
+            if samples.sum() > 0:
+                global_grad = np.sum(local_grads * samples[:, None], axis=0) / np.sum(samples)
+            else:
+                global_grad = np.mean(local_grads, axis=0)
+
+        # save immediate SA data to ga_history for logging/analysis
+        self.ga_history['local_grads'] = local_grads
+        self.ga_history['global_grad'] = global_grad
+
+        t0 = time.time()
+        indices, info = simulated_annealing_select(
+            local_grads=local_grads,
+            global_grad=global_grad,
+            k=k,
+            samples=samples,
+            selection_counts=getattr(self, 'selection_counts', None),
+            sa_params=getattr(self, 'sa_params', None),
+            rng=np.random.RandomState()
+        )
+        selection_time = time.time() - t0
+        info['selection_time'] = selection_time
+
+        # update selection counts and history if available
+        if hasattr(self, 'selection_counts') and indices.size > 0:
+            self.selection_counts[indices] += 1
+        self.ga_history['last_selected_indices'] = indices
+        self.ga_history['last_gradient_dissimilarity'] = info.get('dissimilarity', None)
+
+        # emit diagnostic line for parsing
+        # try:
+        #     from tqdm import tqdm
+        #     tqdm.write(f"SA selection: selected={indices.tolist()} dissimilarity={info.get('dissimilarity')} best_cost={info.get('best_cost')} selection_time={selection_time}")
+        # except Exception:
+        #     print(f"SA selection: selected={indices.tolist()} dissimilarity={info.get('dissimilarity')} best_cost={info.get('best_cost')} selection_time={selection_time}")
+
+        return indices, np.asarray(self.clients)[indices]
+
+    def simulated_annealing_hybrid(self, num_clients, local_grads=None, global_grad=None, samples=None):
+        """Hybrid selection: select a fraction with SA and the rest uniformly at random."""
+        num_clients = min(num_clients, len(self.clients))
+        n = len(self.clients)
+        k = int(num_clients)
+
+        # compute gradients if missing
+        if local_grads is None or global_grad is None or samples is None:
+            model_len = process_grad(self.latest_model).size
+            local_grads = []
+            samples = []
+            self.client_model.set_params(self.latest_model)
+            for c in self.clients:
+                num, grad = c.get_grads(model_len)
+                samples.append(num)
+                local_grads.append(grad)
+            local_grads = np.asarray(local_grads)
+            samples = np.asarray(samples, dtype=float)
+
+            if samples.sum() > 0:
+                global_grad = np.sum(local_grads * samples[:, None], axis=0) / np.sum(samples)
+            else:
+                global_grad = np.mean(local_grads, axis=0)
+
+        frac = float(self.sa_params.get('hybrid_fraction', 0.5))
+        k_sa = int(max(1, round(k * frac)))
+        k_rand = k - k_sa
+
+        # run SA for k_sa
+        sa_indices, info = simulated_annealing_select(
+            local_grads=local_grads,
+            global_grad=global_grad,
+            k=k_sa,
+            samples=samples,
+            selection_counts=getattr(self, 'selection_counts', None),
+            sa_params=getattr(self, 'sa_params', None),
+            rng=np.random.RandomState()
+        )
+
+        # pick remaining uniformly from remaining clients
+        all_idx = np.arange(n)
+        remaining = np.setdiff1d(all_idx, sa_indices)
+        if k_rand > 0 and remaining.size > 0:
+            rand_pick = np.random.choice(remaining, size=min(k_rand, remaining.size), replace=False)
+        else:
+            rand_pick = np.array([], dtype=int)
+
+        # combine
+        indices = np.concatenate([sa_indices, rand_pick])
+        indices = np.unique(indices)
+        # ensure exactly k by sampling if needed
+        if indices.size < k:
+            pool = np.setdiff1d(all_idx, indices)
+            extra = np.random.choice(pool, size=(k - indices.size), replace=False)
+            indices = np.concatenate([indices, extra])
+
+        # update counts and history
+        if hasattr(self, 'selection_counts') and indices.size > 0:
+            self.selection_counts[indices] += 1
+        self.ga_history['last_selected_indices'] = indices
+        self.ga_history['last_gradient_dissimilarity'] = info.get('dissimilarity', None)
+
+        # log diagnostic
+        # try:
+        #     from tqdm import tqdm
+        #     tqdm.write(f"SA-hybrid selection: selected={indices.tolist()} sa_count={k_sa} dissimilarity={info.get('dissimilarity')} best_cost={info.get('best_cost')}")
+        # except Exception:
+        #     print(f"SA-hybrid selection: selected={indices.tolist()} sa_count={k_sa} dissimilarity={info.get('dissimilarity')} best_cost={info.get('best_cost')}")
+
         return indices, np.asarray(self.clients)[indices]
