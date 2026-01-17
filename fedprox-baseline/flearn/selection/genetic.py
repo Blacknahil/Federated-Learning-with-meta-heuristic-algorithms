@@ -52,100 +52,93 @@ def genetic_select(local_grads,
         dissimilarity = np.linalg.norm(subset_grad - global_grad)
         return indices, {'dissimilarity': dissimilarity, 'best_fitness': None}
 
-    # defaults
+    # GA hyperparameters with sensible defaults
     if ga_params is None:
         ga_params = {}
-    pop_size = int(ga_params.get('pop_size', min(50, max(10, 5 * k))))
-    generations = int(ga_params.get('num_gen', 15))
+    pop_size = int(ga_params.get('pop_size', 50))
+    generations = int(ga_params.get('num_gen', 20))
     mutation_rate = float(ga_params.get('mutation_rate', 0.1))
     crossover_rate = float(ga_params.get('crossover_rate', 0.9))
-    tournament_size = int(ga_params.get('tournament_size', 3))
+    lambda_info = float(ga_params.get('lambda_info', 0.5))
     selection_penalty = float(ga_params.get('selection_penalty', 0.0))
 
-    # population: binary vectors with exactly k ones
-    pop = np.zeros((pop_size, n), dtype=int)
-    for i in range(pop_size):
-        ones = rng.choice(n, k, replace=False)
-        pop[i, ones] = 1
+    # initialize population (include a single random baseline individual)
+    population = []
+    idx_random = rng.choice(n, k, replace=False)
+    chrom_random = np.zeros(n, dtype=int)
+    chrom_random[idx_random] = 1
+    population.append(chrom_random)
 
-    def fitness(ind):
-        idx = np.where(ind == 1)[0]
-        if idx.size == 0:
-            return -1e9
-        subset_grad = np.mean(local_grads[idx], axis=0)
-        dissimilarity = np.linalg.norm(subset_grad - global_grad)
+    for _ in range(pop_size - 1):
+        chrom = np.zeros(n, dtype=int)
+        chrom[rng.choice(n, k, replace=False)] = 1
+        population.append(chrom)
+
+    def evaluate_fitness(chrom):
+        indices = np.where(chrom == 1)[0]
+        if len(indices) == 0:
+            return -np.inf
+
+        selected_grads = local_grads[indices]
+        selected_samples = samples[indices] if samples is not None else None
+
+        subset_avg = np.mean(selected_grads, axis=0)
+
+        drift = np.linalg.norm(subset_avg - global_grad)
+        magnitude = np.linalg.norm(subset_avg)
+
         penalty = 0.0
         if selection_counts is not None:
-            penalty = selection_penalty * np.sum(selection_counts[idx])
-        return -dissimilarity - penalty
+            penalty = selection_penalty * np.sum(selection_counts[indices])
 
-    fitness_vals = np.array([fitness(ind) for ind in pop])
-    best = pop[np.argmax(fitness_vals)].copy()
+        return -drift + (lambda_info * magnitude) - penalty
 
+    # Evolution loop with simple elitism + tournament-like selection
     for _ in range(generations):
-        new_pop = np.zeros_like(pop)
-        new_pop[0] = best  # elitism
+        scores = np.array([evaluate_fitness(c) for c in population])
+        best_idx = np.argmax(scores)
+        next_pop = [population[best_idx].copy()]
 
-        for i in range(1, pop_size, 2):
-            # tournament selection
-            ids = rng.choice(pop_size, tournament_size, replace=False)
-            parent1 = pop[ids[np.argmax(fitness_vals[ids])]]
-            ids = rng.choice(pop_size, tournament_size, replace=False)
-            parent2 = pop[ids[np.argmax(fitness_vals[ids])]]
+        while len(next_pop) < pop_size:
+            # pick two parents via random tournament of size 2
+            p1_idx = rng.randint(pop_size)
+            p2_idx = rng.randint(pop_size)
+            parent1 = population[p1_idx] if scores[p1_idx] > scores[p2_idx] else population[p2_idx]
 
-            # crossover
+            child = parent1.copy()
             if rng.rand() < crossover_rate:
-                cp = rng.randint(1, n)
-                child1 = np.concatenate([parent1[:cp], parent2[cp:]])
-                child2 = np.concatenate([parent2[:cp], parent1[cp:]])
-            else:
-                child1 = parent1.copy()
-                child2 = parent2.copy()
+                parent2 = population[rng.randint(pop_size)]
+                mask = rng.rand(n) > 0.5
+                child[mask] = parent2[mask]
 
-            # repair
-            def repair(child):
-                s = child.sum()
-                if s > k:
-                    ones_idx = np.where(child == 1)[0]
-                    drop = rng.choice(ones_idx, int(s - k), replace=False)
-                    child[drop] = 0
-                elif s < k:
-                    zeros_idx = np.where(child == 0)[0]
-                    add = rng.choice(zeros_idx, int(k - s), replace=False)
-                    child[add] = 1
-                return child
+            if rng.rand() < mutation_rate:
+                ones = np.where(child == 1)[0]
+                zeros = np.where(child == 0)[0]
+                if len(ones) > 0 and len(zeros) > 0:
+                    swap_out = rng.choice(ones)
+                    swap_in = rng.choice(zeros)
+                    child[swap_out] = 0
+                    child[swap_in] = 1
 
-            child1 = repair(child1)
-            child2 = repair(child2)
+            # repair to ensure exactly k ones
+            current_k = child.sum()
+            if current_k > k:
+                remove_indices = rng.choice(np.where(child == 1)[0], int(current_k - k), replace=False)
+                child[remove_indices] = 0
+            elif current_k < k:
+                add_indices = rng.choice(np.where(child == 0)[0], int(k - current_k), replace=False)
+                child[add_indices] = 1
 
-            # mutation: swap a selected and an unselected gene
-            def mutate(child):
-                if rng.rand() < mutation_rate:
-                    ones_idx = np.where(child == 1)[0]
-                    zeros_idx = np.where(child == 0)[0]
-                    if ones_idx.size > 0 and zeros_idx.size > 0:
-                        i1 = rng.choice(ones_idx)
-                        i0 = rng.choice(zeros_idx)
-                        child[i1] = 0
-                        child[i0] = 1
-                return child
+            next_pop.append(child)
 
-            child1 = mutate(child1)
-            child2 = mutate(child2)
+        population = next_pop
 
-            new_pop[i] = child1
-            if i + 1 < pop_size:
-                new_pop[i + 1] = child2
+    final_scores = np.array([evaluate_fitness(c) for c in population])
+    best_chrom = population[np.argmax(final_scores)]
+    indices = np.where(best_chrom == 1)[0]
 
-        pop = new_pop
-        fitness_vals = np.array([fitness(ind) for ind in pop])
-        gen_best = pop[np.argmax(fitness_vals)].copy()
-        if fitness_vals.max() > fitness(best):
-            best = gen_best
-
-    indices = np.where(best == 1)[0]
     subset_grad = np.mean(local_grads[indices], axis=0)
     dissimilarity = np.linalg.norm(subset_grad - global_grad)
-    best_f = fitness(best)
+    best_f = float(final_scores.max())
 
     return indices, {'dissimilarity': dissimilarity, 'best_fitness': best_f}

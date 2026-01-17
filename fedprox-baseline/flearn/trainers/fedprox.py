@@ -134,7 +134,6 @@ class Server(BaseFedarated):
     
     def genetic(self, num_clients, local_grads=None, global_grad=None, samples=None):
         # Delegate to the modular GA selector (keeps this class clean).
-        # If precomputed gradients are provided, use them instead of recomputing.
         num_clients = min(num_clients, len(self.clients))
         n = len(self.clients)
         k = int(num_clients)
@@ -150,7 +149,7 @@ class Server(BaseFedarated):
             self.ga_history['last_gradient_dissimilarity'] = 0.0
             return indices, np.asarray(self.clients)[indices]
 
-        # If gradients weren't passed in, compute them here
+        # If gradients weren't passed in, compute them here (fallback)
         if local_grads is None or global_grad is None or samples is None:
             model_len = process_grad(self.latest_model).size
             local_grads = []
@@ -172,7 +171,7 @@ class Server(BaseFedarated):
         self.ga_history['local_grads'] = local_grads
         self.ga_history['global_grad'] = global_grad
 
-        # call generic GA selector
+        # call generic GA selector in selection/genetic.py
         indices, info = genetic_select(
             local_grads=local_grads,
             global_grad=global_grad,

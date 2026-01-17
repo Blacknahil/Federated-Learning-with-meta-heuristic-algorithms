@@ -1,0 +1,30 @@
+# Comparison: Random vs Genetic
+
+## Metrics
+
+| Metric | Random | Genetic |
+|---:|:---:|:---:|
+| best_acc | 0.8967295426787896 | 0.8991722078979508 |
+| rounds_to_90% | None | None |
+| loss_std_last10 | 0.01185448494902312 | 0.005889008066330272 |
+| avg_grad_diff | 16.7391282130378 | 17.22332268605272 |
+
+## Training Parameters
+
+| Parameter | Random | Genetic |
+|---|---|---|
+| batch_size | 10 | 10 |
+| clients_per_round | 10 | 10 |
+| dataset | mnist | mnist |
+| drop_percent | 0.1 | 0.1 |
+| eval_every | 1 | 1 |
+| learning_rate | 0.03 | 0.03 |
+| model | mclr | mclr |
+| model_params | (10,) | (10,) |
+| mu | 1.0 | 1.0 |
+| num_epochs | 20 | 20 |
+| num_iters | 1 | 1 |
+| num_rounds | 200 | 200 |
+| optimizer | fedprox | fedprox |
+| seed | 0 | 0 |
+| selection_method | random | ga |

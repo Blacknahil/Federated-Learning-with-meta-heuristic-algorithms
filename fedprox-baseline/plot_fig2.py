@@ -59,6 +59,51 @@ def parse_log(file_name):
     return np.array(rounds), np.array(train_loss), test_rounds, test_vals, np.array(grad_diff)
 
 
+def extract_params(file_name):
+    """Extract the printed `Arguments:` block from a run log into a dict.
+
+    Looks for the first line containing 'Arguments:' and then parses subsequent
+    `key : value` lines until a non-matching line is reached.
+    """
+    params = {}
+    if not os.path.isfile(file_name):
+        return params
+
+    with open(file_name, 'r') as fh:
+        lines = fh.readlines()
+
+    # find the Arguments: line
+    start = None
+    for i, line in enumerate(lines):
+        if line.strip().startswith('Arguments:'):
+            start = i + 1
+            break
+
+    if start is None:
+        return params
+
+    for line in lines[start:]:
+        # stop when we hit a blank line or a line that is unlikely to be a param
+        if line.strip() == '':
+            break
+        m = re.match(r"\s*([^:]+)\s*:\s*(.*)", line)
+        if not m:
+            break
+        key = m.group(1).strip()
+        val = m.group(2).strip()
+        # try to coerce numbers
+        try:
+            if '.' in val or 'e' in val.lower():
+                v = float(val)
+            else:
+                v = int(val)
+        except Exception:
+            v = val
+        params[key] = v
+
+    return params
+
+
 def rounds_to_target(test_rounds, test_vals, target):
     if test_vals.size == 0:
         return None
@@ -71,6 +116,8 @@ def rounds_to_target(test_rounds, test_vals, target):
 def summarize_and_plot(log1, log2, label1='Random', label2='Genetic', target_acc=0.9, last_n=10, out_prefix='comparison'):
     r1, loss1, tr1, acc1, gd1 = parse_log(log1)
     r2, loss2, tr2, acc2, gd2 = parse_log(log2)
+    p1 = extract_params(log1)
+    p2 = extract_params(log2)
 
     # Metrics
     best_acc1 = acc1.max() if acc1.size else None
@@ -135,12 +182,52 @@ def summarize_and_plot(log1, log2, label1='Random', label2='Genetic', target_acc
 
     # Bar: final accuracy and rounds to target
     ax = axes[1, 1]
-    bars = [best_acc1 if best_acc1 is not None else 0, best_acc2 if best_acc2 is not None else 0]
-    ax.bar([0, 1], bars, color=['#1f77b4', '#ff7f0e'])
-    ax.set_xticks([0, 1])
-    ax.set_xticklabels([label1, label2])
-    ax.set_ylim(0, 1)
-    ax.set_title('Best Test Accuracy')
+    # Table: metrics and parameters comparison (replace bar plot)
+    ax.axis('off')
+
+    # Metrics rows
+    def fmt(v, precision=4):
+        if v is None:
+            return ''
+        try:
+            return f"{v:.{precision}f}"
+        except Exception:
+            return str(v)
+
+    metrics_rows = [
+        ("best_acc", fmt(best_acc1, 6), fmt(best_acc2, 6)),
+        (f"rounds_to_{int(target_acc*100)}%", rounds_target1 or "", rounds_target2 or ""),
+        (f"loss_std_last{last_n}", fmt(stability1, 6), fmt(stability2, 6)),
+        ("avg_grad_diff", fmt(avg_gd1, 6), fmt(avg_gd2, 6)),
+    ]
+
+    # Parameters rows
+    p1 = extract_params(log1)
+    p2 = extract_params(log2)
+    all_keys = sorted(set(p1.keys()) | set(p2.keys()))
+    param_rows = []
+    for k in all_keys:
+        param_rows.append((k, str(p1.get(k, '')), str(p2.get(k, ''))))
+
+    # Combine
+    table_rows = []
+    table_rows.append(("Metric/Param", label1, label2))
+    for r in metrics_rows:
+        table_rows.append(r)
+    if param_rows:
+        table_rows.append(("", "", ""))
+        table_rows.append(("-- Parameters --", "", ""))
+        for r in param_rows:
+            table_rows.append(r)
+
+    # create table
+    col_labels = ["Metric/Param", label1, label2]
+    cell_text = [list(row) for row in table_rows[1:]]
+    table = ax.table(cellText=cell_text, colLabels=col_labels, loc='center', cellLoc='left')
+    table.auto_set_font_size(False)
+    table.set_fontsize(7)
+    table.scale(1, 1.2)
+    # ax.set_title('Comparison Table', pad=12)
 
     plt.tight_layout()
     out_png = out_prefix + '.png'
@@ -154,6 +241,9 @@ def summarize_and_plot(log1, log2, label1='Random', label2='Genetic', target_acc
         'loss_std_lastN': [stability1, stability2],
         'avg_grad_diff': [avg_gd1, avg_gd2]
     }
+
+    # include parameters in the JSON summary
+    summary['params'] = [p1, p2]
 
     # ensure comparisons folder structure
     def detect_method(log_path):
@@ -185,10 +275,53 @@ def summarize_and_plot(log1, log2, label1='Random', label2='Genetic', target_acc
     fig.savefig(out_png_comp)
     out_csv = os.path.join(comp_dir, out_prefix + '_summary.csv')
     import csv
+    # write a compact summary CSV (metrics)
     with open(out_csv, 'w', newline='') as cf:
         writer = csv.writer(cf)
         writer.writerow(list(summary.keys()))
         writer.writerows(zip(*list(summary.values())))
+
+    # write a full comparison table (metrics + params) as CSV and Markdown
+    full_csv = os.path.join(comp_dir, out_prefix + '_comparison_table.csv')
+    rows = []
+    # metrics rows
+    rows.append(('metric', label1, label2))
+    rows.append(('best_acc', best_acc1, best_acc2))
+    rows.append((f'rounds_to_{int(target_acc*100)}%', rounds_target1, rounds_target2))
+    rows.append((f'loss_std_last{last_n}', stability1, stability2))
+    rows.append(('avg_grad_diff', avg_gd1, avg_gd2))
+
+    # parameters (union of keys)
+    all_keys = set(p1.keys()) | set(p2.keys())
+    if all_keys:
+        rows.append(('', '', ''))
+        rows.append(('parameter', label1, label2))
+    for k in sorted(all_keys):
+        rows.append((k, p1.get(k, ''), p2.get(k, '')))
+
+    with open(full_csv, 'w', newline='') as cf:
+        writer = csv.writer(cf)
+        for row in rows:
+            writer.writerow(row)
+
+    # Markdown table
+    md_file = os.path.join(comp_dir, out_prefix + '_comparison_table.md')
+    with open(md_file, 'w') as mf:
+        mf.write(f"# Comparison: {label1} vs {label2}\n\n")
+        mf.write("## Metrics\n\n")
+        mf.write("| Metric | {0} | {1} |\n".format(label1, label2))
+        mf.write("|---:|:---:|:---:|\n")
+        mf.write(f"| best_acc | {best_acc1} | {best_acc2} |\n")
+        mf.write(f"| rounds_to_{int(target_acc*100)}% | {rounds_target1} | {rounds_target2} |\n")
+        mf.write(f"| loss_std_last{last_n} | {stability1} | {stability2} |\n")
+        mf.write(f"| avg_grad_diff | {avg_gd1} | {avg_gd2} |\n\n")
+
+        if all_keys:
+            mf.write("## Training Parameters\n\n")
+            mf.write("| Parameter | {0} | {1} |\n".format(label1, label2))
+            mf.write("|---|---|---|\n")
+            for k in sorted(all_keys):
+                mf.write(f"| {k} | {p1.get(k, '')} | {p2.get(k, '')} |\n")
 
     # copy into per-method folder too
     out_png_method = os.path.join(method2_dir, out_prefix + '.png')
