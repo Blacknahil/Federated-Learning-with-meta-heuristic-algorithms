@@ -351,9 +351,11 @@ def main():
     parser.add_argument('--target_acc', type=float, default=0.9, help='Target accuracy for convergence metric')
     parser.add_argument('--last_n', type=int, default=10, help='Number of last rounds to compute stability')
     parser.add_argument('--out_prefix', type=str, default='comparison', help='Output prefix for plots and summaries')
+    parser.add_argument('--label1', type=str, default='Random', help='Label for the first log')
+    parser.add_argument('--label2', type=str, default='Genetic', help='Label for the second log')
     args = parser.parse_args()
 
-    summarize_and_plot(args.random_log, args.ga_log, label1='Random', label2='Genetic', target_acc=args.target_acc, last_n=args.last_n, out_prefix=args.out_prefix)
+    summarize_and_plot(args.random_log, args.ga_log, label1=args.label1, label2=args.label2, target_acc=args.target_acc, last_n=args.last_n, out_prefix=args.out_prefix)
 
 
 if __name__ == '__main__':
