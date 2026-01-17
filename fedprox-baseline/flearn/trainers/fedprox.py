@@ -142,17 +142,17 @@ class Server(BaseFedarated):
         
         elif self.selection_method == 'ga':
             # Delegate to GA and pass precomputed gradients when available
-            return self.genetic(num_clients, local_grads=local_grads, global_grad=global_grad, samples=samples)
+            return self.genetic(round, num_clients, local_grads=local_grads, global_grad=global_grad, samples=samples)
             
         elif self.selection_method == 'pso':
             # Delegate to PSO with precomputed gradients
-            return self.particle_swarm(num_clients, local_grads=local_grads, global_grad=global_grad, samples=samples)
+            return self.particle_swarm(round, num_clients, local_grads=local_grads, global_grad=global_grad, samples=samples)
         
         elif self.selection_method == 'sa':
             # Your Simulated Annealing logic here
             return self.simulated_annealing(num_clients)
     
-    def genetic(self, num_clients, local_grads=None, global_grad=None, samples=None):
+    def genetic(self, round_idx, num_clients, local_grads=None, global_grad=None, samples=None):
         # Delegate to the modular GA selector (keeps this class clean).
         num_clients = min(num_clients, len(self.clients))
         n = len(self.clients)
@@ -199,7 +199,7 @@ class Server(BaseFedarated):
             samples=samples,
             selection_counts=getattr(self, 'selection_counts', None),
             ga_params=getattr(self, 'ga_params', None),
-            rng=np.random.RandomState()
+            rng=np.random.RandomState(round_idx)
         )
 
         # update selection counts and history if available
@@ -210,7 +210,7 @@ class Server(BaseFedarated):
 
         return indices, np.asarray(self.clients)[indices]
     
-    def particle_swarm(self, num_clients, local_grads=None, global_grad=None, samples=None):
+    def particle_swarm(self, round_idx, num_clients, local_grads=None, global_grad=None, samples=None):
         """PSO-based client selection optimizing gradient similarity."""
         num_clients = min(num_clients, len(self.clients))
         n = len(self.clients)
@@ -257,7 +257,7 @@ class Server(BaseFedarated):
             samples=samples,
             selection_counts=getattr(self, 'selection_counts', None),
             pso_params=getattr(self, 'pso_params', None),
-            rng=np.random.RandomState()
+            rng=np.random.RandomState(round_idx)
         )
 
         # Update selection counts and history
