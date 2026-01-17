@@ -145,9 +145,8 @@ def summarize_and_plot(log1, log2, label1='Random', label2='Genetic', target_acc
     plt.tight_layout()
     out_png = out_prefix + '.png'
     fig.savefig(out_png)
-    print(f'Plots saved to {out_png}')
 
-    # Save a small CSV summary
+    # Prepare summary data
     summary = {
         'label': [label1, label2],
         'best_acc': [best_acc1, best_acc2],
@@ -155,13 +154,61 @@ def summarize_and_plot(log1, log2, label1='Random', label2='Genetic', target_acc
         'loss_std_lastN': [stability1, stability2],
         'avg_grad_diff': [avg_gd1, avg_gd2]
     }
+
+    # ensure comparisons folder structure
+    def detect_method(log_path):
+        method = None
+        try:
+            with open(log_path, 'r') as fh:
+                for line in fh:
+                    m = re.search(r"selection_method\s*:\s*(\w+)", line)
+                    if m:
+                        method = m.group(1).strip()
+                        break
+        except Exception:
+            method = None
+        if method is None:
+            return None
+        mapping = {'ga': 'genetic', 'pso': 'pso', 'sa': 'simulated_annealing', 'random': 'random'}
+        return mapping.get(method, method)
+
+    m1 = detect_method(log1) or label1
+    m2 = detect_method(log2) or label2
+    comp_dir = os.path.join('comparisons', f"{m1}_vs_{m2}")
+    os.makedirs(comp_dir, exist_ok=True)
+    # also ensure per-method folder for the compared method
+    method2_dir = os.path.join('comparisons', m2)
+    os.makedirs(method2_dir, exist_ok=True)
+
+    # save outputs into comparison folder and into the method folder
+    out_png_comp = os.path.join(comp_dir, out_prefix + '.png')
+    fig.savefig(out_png_comp)
+    out_csv = os.path.join(comp_dir, out_prefix + '_summary.csv')
     import csv
-    csv_file = out_prefix + '_summary.csv'
-    with open(csv_file, 'w', newline='') as cf:
+    with open(out_csv, 'w', newline='') as cf:
         writer = csv.writer(cf)
         writer.writerow(list(summary.keys()))
         writer.writerows(zip(*list(summary.values())))
-    print(f'Summary CSV saved to {csv_file}')
+
+    # copy into per-method folder too
+    out_png_method = os.path.join(method2_dir, out_prefix + '.png')
+    try:
+        import shutil
+        shutil.copyfile(out_png_comp, out_png_method)
+        shutil.copyfile(out_csv, os.path.join(method2_dir, out_prefix + '_summary.csv'))
+    except Exception:
+        pass
+
+    # Save JSON summary as well
+    try:
+        import json
+        json_file = os.path.join(comp_dir, out_prefix + '_summary.json')
+        with open(json_file, 'w') as jf:
+            json.dump(summary, jf, indent=2)
+    except Exception:
+        pass
+
+    print(f'Plots and summary saved to {comp_dir} (and {method2_dir})')
 
 
 def main():
